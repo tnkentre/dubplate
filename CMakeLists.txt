@@ -66,6 +66,7 @@ include(${YAVC_PATH}/cmakes/install.cmake)
 # Include path to YAVC
 include_directories(
   ${YAVC_PATH}/build.${PLATFORM}/include/yavc
+  $<$<BOOL:${WITH_NE10}>:${YAVC_PATH}/build.${PLATFORM}/include/Ne10>
   ${YAVC_PATH}/src/template
 )
 

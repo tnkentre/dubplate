@@ -28,8 +28,6 @@ set(LIBRARIES
   kissfft-float
   opus
   $<$<BOOL:${WITH_NE10}>:NE10>
-  $<$<BOOL:${ANDROID_PLATFORM}>:m>
-  $<$<BOOL:${ANDROID_PLATFORM}>:log>
 )
 
 # ------------------------------
