@@ -21,13 +21,7 @@ set(SOURCES
 # ------------------------------
 # Libraries
 set(LIBRARIES
-  yavc_audiolib
-  yavc_codec
-  yavc_util
-  yavc_core
-  kissfft-float
-  opus
-  $<$<BOOL:${WITH_NE10}>:NE10>
+  ${YAVC_LIBS}
 )
 
 # ------------------------------
@@ -89,7 +83,10 @@ juce_add_plugin(${TARGET_NAME}_PLUGIN
   PRODUCT_NAME "${TARGET_NAME}")              # The name of the final executable, which can differ from the target name
 
 juce_generate_juce_header (${TARGET_NAME}_PLUGIN)
-target_sources            (${TARGET_NAME}_PLUGIN PRIVATE ${YAVC_PATH}/src/template/juce_plugin_wrapper.cpp)
+target_sources            (${TARGET_NAME}_PLUGIN PRIVATE
+  ${YAVC_PATH}/src/template/juce_plugin_wrapper.cpp
+  ${YAVC_PATH}/src/template/juce_editor_wrapper.cpp
+)
 target_compile_definitions(${TARGET_NAME}_PLUGIN PUBLIC
   # JUCE_WEB_BROWSER and JUCE_USE_CURL would be on by default, but you might not need them.
   JUCE_WEB_BROWSER=0  # If you remove this, add `NEEDS_WEB_BROWSER TRUE` to the `juce_add_plugin` call

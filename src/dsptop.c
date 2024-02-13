@@ -214,10 +214,17 @@ SymbolTable* dsptop_symboltable(dsptop_state* top)
 #include "jack_fwk.h"
 int main(int argc, char* argv[])
 {
-  /* Create dsptop instance */
-  dsptop_state* dsptop = dsptop_init(48000, 512);
+  /* yavc_init() needs to be called prior to dsptop_init() for jack */
+  yavc_init();
 
-  jack_fwk_state* jack = jack_fwk_init("jack", CH_IN_NUM, CH_OUT_NUM, dsptop->frame_size, (JACK_FWK_PROCESS_CALLBACK)dsptop_proc, dsptop);
+  /* Create jack instance */
+  jack_fwk_state* jack = jack_fwk_init("jack",   CH_IN_NUM,   CH_OUT_NUM);
+
+  /* Create dsptop instance */
+  dsptop_state* dsptop = dsptop_init(jack_fwk_get_fs(jack), jack_fwk_get_frame_size(jack));
+
+  /* Start audio process with jack */
+  jack_fwk_start(jack, (JACK_FWK_PROCESS_CALLBACK)dsptop_proc, dsptop);
 
   /* CLI */
   char cmd[128];

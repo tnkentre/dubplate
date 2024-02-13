@@ -63,27 +63,8 @@ project(${YAVC_PROJECT_NAME} VERSION ${YAVC_PROJECT_VERSION})
 # Configure install path
 include(${YAVC_PATH}/cmakes/install.cmake)
 
-# Include path to YAVC
-include_directories(
-  ${YAVC_PATH}/build.${PLATFORM}/include/yavc
-  $<$<BOOL:${WITH_NE10}>:${YAVC_PATH}/build.${PLATFORM}/include/Ne10>
-  ${YAVC_PATH}/src/template
-)
-
-# Link path to YAVC
-link_directories   (${YAVC_PATH}/build.${PLATFORM}/lib)
-
-# ---- Option setting ----
-# JUCE
-if(WITH_JUCE)
-  set(CMAKE_PREFIX_PATH ${YAVC_PATH}/build.${PLATFORM}/lib/cmake/JUCE-7.0.5 ${CMAKE_PREFIX_PATH})
-  find_package(JUCE REQUIRED)
-endif(WITH_JUCE)
-
-# OpenCV
-if(WITH_VIDEO)
-  find_package(OpenCV REQUIRED)
-endif(WITH_VIDEO)
+# Import YAVC libraries
+include(${YAVC_PATH}/cmakes/import.cmake)
 
 # ---- src ----
 add_subdirectory(src)
