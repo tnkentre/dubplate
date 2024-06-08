@@ -30,7 +30,7 @@
 #include "CircularBuf.h"
 #include "FB.h"
 #include "FB_filters.h"
-#include "RevoFFT.h"
+#include "yavc_fft.h"
 #include "FBvsb.h"
 
 /* modify buffer index to be within the range */
@@ -95,7 +95,7 @@ struct FBVSB_State_ {
   int    loop_end;
 
   /* Audio Components */
-  RevoFFTState * restrict fft;
+  yavc_fft_state * restrict fft;
   
   /* parameters */
   float loopgain;
@@ -155,7 +155,7 @@ FBVSB_State *FBvsb_init(const char * name, int nch, int fs, int frame_size, floa
     st->ch[ch].syn   = FBsynthesis_init(fbinfo->fftsize, fbinfo->decimation, fbinfo->lg, fbinfo->filter_g, 1);
   }
 
-  st->fft           = RevoFFT_initr(fft_size);
+  st->fft           = yavc_fft_r2c_init(fft_size);
   
   st->fpos          = 0.0f;
   st->loopgain      = 1.0f;
@@ -202,7 +202,7 @@ static void proc_put(FBVSB_State * restrict st, float* src[], float* speed)
           for (m=0; m<fbfilter_size/fft_size-1; m++) {
             vec_add1(fftbuf, &fftbuf[(m+1)*fft_size], fft_size);
           }
-          RevoFFT_fftr(st->fft, (float*)fdtemp, fftbuf);
+          yavc_fft_r2c(st->fft, fdtemp, fftbuf);
           vec_cplx_wadd1(chst->hist[cur].X, st->feedbackgain, st->recgain, fdtemp, nband);
         }
 
@@ -212,7 +212,7 @@ static void proc_put(FBVSB_State * restrict st, float* src[], float* speed)
           for (m=0; m<fbfilter_size/fft_size-1; m++) {
             vec_add1(fftbuf, &fftbuf[(m+1)*fft_size], fft_size);
           }
-          RevoFFT_fftr(st->fft, (float*)fdtemp, fftbuf);
+          yavc_fft_r2c(st->fft, fdtemp, fftbuf);
           vec_cplx_wadd1(chst->hist[cur].X1, st->feedbackgain, st->recgain, fdtemp, nband);
         }
 
@@ -331,6 +331,14 @@ void FBvsb_set_loop(FBVSB_State * restrict st, int loop_start, int loop_len)
     }
     ADJIDX(st->fpos, st->loop_start, st->loop_end, size);
   }
+}
+
+void FBvsb_set_pos(FBVSB_State * restrict st, float fpos, float fpos_prev, float speed_prev)
+{
+  ADJIDX(fpos, st->loop_start, st->loop_end, st->nhist * st->frame_size);
+  st->fpos = fpos;
+  (void)fpos_prev;
+  (void)speed_prev;  
 }
 
 void FBvsb_set_feedbackgain(FBVSB_State * restrict st, float feedbackgain)

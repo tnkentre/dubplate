@@ -73,6 +73,15 @@ void vsb_set_feedbackgain(VSB_State * restrict st, float feedbackgain);
  */
 void vsb_set_loop(VSB_State * restrict st, int loop_start, int loop_len);
 
+/** @fn void vsb_set_pos(VSB_State * restrict st, float fpos, float fpos_prev, float speed_prev)
+ * @brief This function sets the current position
+ * @param st State of the VSB
+ * @param fpos New position
+ * @param fpos_prev New previous position
+ * @param speed_prev New last speed
+ */
+void vsb_set_pos(VSB_State * restrict st, float fpos, float fpos_prev, float speed_prev);
+
 /** @fn float vsb_get_pos(VSB_State * restrict st)
  * @brief This function return the current buffer index
  * @param st State of the VSB

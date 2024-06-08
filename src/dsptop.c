@@ -30,7 +30,8 @@
 #include "vectors_cplx.h"
 #include "FB.h"
 #include "FB_filters.h"
-#include "turntable.h"
+//#include "turntable.h"
+#include "mtseq.h"
 
 #include "dsptop.h"
 
@@ -46,6 +47,8 @@ typedef enum {
   CH_IN_TC0R,
   CH_IN_TC1L,
   CH_IN_TC1R,
+  CH_IN_EFXL,
+  CH_IN_EFXR,
   CH_IN_NUM
 } CH_IN;
 
@@ -56,6 +59,8 @@ typedef enum {
   CH_OUT_AUD0R,
   CH_OUT_AUD1L,
   CH_OUT_AUD1R,
+  CH_OUT_EFXL,
+  CH_OUT_EFXR,
   CH_OUT_NUM
 } CH_OUT;
 
@@ -80,23 +85,20 @@ struct dsptop_state_{
   int nch_output;
 
   /* parameters */
-  float sync0;
-  float sync1;
-  int source0;
-  int source1;
+  float bpm;
+  int source;
 
   /* Co-components */
-  TurntableState* turntable[NTURNTABLE];
+  mtseq_state* mtseq[NTURNTABLE];
+
 } ;
 
 //----------------------------------------------------------
 // DSPTOP Parameters
 //----------------------------------------------------------
 static const RegDef_t rd[] = {
-  AC_REGDEF(sync0,     CLI_ACFPTM,   dsptop_state, "sync0 [range: 0   - 1  ]"),
-  AC_REGDEF(sync1,     CLI_ACFPTM,   dsptop_state, "sync1 [range: 0   - 1  ]"),
-  AC_REGDEF(source0,   CLI_ACIPTM,   dsptop_state, "source0 [range: 0   - 1  ]"),
-  AC_REGDEF(source1,   CLI_ACIPTM,   dsptop_state, "source1 [range: 0   - 1  ]"),
+  AC_REGDEF(bpm,     CLI_ACFPTM,   dsptop_state, "bpm [range: 20.0   - 200.0  ]"),
+  AC_REGDEF(source,  CLI_ACIPTM,   dsptop_state, "source [range: 0   - 1  ]"),
 };
 
 //**********************************************************
@@ -126,19 +128,18 @@ dsptop_state* dsptop_init(int fs, int frame_size)
   st->nch_input  = CH_IN_NUM;
   st->nch_output = CH_OUT_NUM;
 
-  st->sync0 = 0.f;
-  st->sync1 = 0.f;
-  st->source0 = 1;
-  st->source1 = 1;
+  st->bpm = 130;
 
   /* Initialize Co-components */
   for (i=0; i<NTURNTABLE; i++) {
-    sprintf(name, "tt%d",i);
-    st->turntable[i] = Turntable_init(name, st->fs, st->frame_size);
+    sprintf(name, "mt%d",i);
+    st->mtseq[i] = mtseq_init(name, st->fs, st->frame_size);
   }
 
   for (i=0; i<NTURNTABLE; i++) {
+#if 0
     char str[32];
+    sprintf(str, "mt%d_seq0",i);   yavc_osc_add_acreg(str, "barpos");
     sprintf(str, "sync%d",i);   yavc_osc_add_acreg("top", str);
     sprintf(str, "source%d",i); yavc_osc_add_acreg("top", str);
     sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "igain");
@@ -151,7 +152,9 @@ dsptop_state* dsptop_init(int fs, int frame_size)
     sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "vinyl");
     sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "loopstart");
     sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "loopend");
+#endif
   }
+
   yavc_osc_set_moninterval(20);
 
   /* Associate this initialized top */
@@ -169,19 +172,11 @@ void dsptop_proc(dsptop_state* st, float* out[], float* in[])
   Task_startNewCycle(); // This is called to compute CPU load
 
   float ** src;
-  float ** tc;
 
-  if (!st->sync0)   tc = &in[CH_IN_TC0L];
-  else              tc = &in[CH_IN_TC1L];
-  if (!st->source0) src = &in[CH_IN_TC0L];
-  else              src = &in[CH_IN_AUDL];
-  Turntable_proc(st->turntable[0], &out[CH_OUT_AUD0L], src, tc);
-
-  if (!st->sync1)   tc = &in[CH_IN_TC1L];
-  else              tc = &in[CH_IN_TC0L];
-  if (!st->source1) src = &in[CH_IN_TC1L];
-  else              src = &in[CH_IN_AUDL];
-  Turntable_proc(st->turntable[1], &out[CH_OUT_AUD1L], src, tc);
+  if (st->source) src = &in[CH_IN_EFXL];
+  else             src = &in[CH_IN_AUDL];
+  mtseq_proc(st->mtseq[0], &out[CH_OUT_AUD0L], src, &in[CH_IN_TC0L]);
+  mtseq_proc(st->mtseq[1], &out[CH_OUT_AUD1L], src, &in[CH_IN_TC1L]);
 
   vec_add(out[CH_OUT_MIXL], out[CH_OUT_AUD0L], out[CH_OUT_AUD1L], st->frame_size);
   vec_add(out[CH_OUT_MIXR], out[CH_OUT_AUD0R], out[CH_OUT_AUD1R], st->frame_size);

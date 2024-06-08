@@ -14,6 +14,8 @@ set(SOURCES
   tcanalysis.c
   turntable.c
   vsb.c
+  mtseq.c
+  wavseq.c
 )
 
 # ------------------------------

@@ -75,6 +75,15 @@ void FBvsb_process(FBVSB_State * restrict st, float* dst[], float* src[], float*
  */
 void FBvsb_set_loop(FBVSB_State * restrict st, int loop_start, int loop_len);
 
+/** @fn void FBvsb_set_pos(FBVSB_State * restrict st, float fpos, float fpos_prev, float speed_prev)
+ * @brief This function sets the current position
+ * @param st State of the FBVSB
+ * @param fpos New position
+ * @param fpos_prev New previous position
+ * @param speed_prev New last speed
+ */
+void FBvsb_set_pos(FBVSB_State * restrict st, float fpos, float fpos_prev, float speed_prev);
+
 /** @fn void FBvsb_set_feedbackgain(FBVSB_State * restrict st, float feedbackgain)
  * @brief This function sets the feedbackgain
  * @param st State of the VSB

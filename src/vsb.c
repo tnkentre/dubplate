@@ -231,6 +231,16 @@ void vsb_set_loop(VSB_State * restrict st, int loop_start, int loop_len)
   }
 }
 
+void vsb_set_pos(VSB_State * restrict st, float fpos, float fpos_prev, float speed_prev)
+{
+  ADJIDX(fpos, st->loop_start, st->loop_end, st->size);
+  st->fpos_prev   = fpos_prev;
+  st->fpos        = fpos;
+  st->src_prev[0] = 0.f;
+  st->src_prev[1] = 0.f;
+  st->speed_prev  = speed_prev;
+}
+
 float vsb_get_pos(VSB_State * restrict st)
 {
   return st->fpos;
