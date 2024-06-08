@@ -80,12 +80,15 @@ juce_add_plugin(${TARGET_NAME}_PLUGIN
   PLUGIN_CODE Dbpt                            # A unique four-character plugin id with exactly one upper-case character
                                               # GarageBand 10.3 requires the first letter to be upper-case, and the remaining letters to be lower-case
   FORMATS AU VST3 Standalone                  # The formats to build. Other valid formats are: AAX Unity VST AU AUv3
+  VST3_CATEGORIES "Fx"                        # Up to 3 categories
+  AU_MAIN_TYPE "kAudioUnitType_Effect"
+  MICROPHONE_PERMISSION_ENABLED TRUE
+  MICROPHONE_PERMISSION_TEXT "This applicaion requires a permission to use an audio input device of your computer. By Default, Built-In microphone will be used."
   PRODUCT_NAME "${TARGET_NAME}")              # The name of the final executable, which can differ from the target name
 
 juce_generate_juce_header (${TARGET_NAME}_PLUGIN)
 target_sources            (${TARGET_NAME}_PLUGIN PRIVATE
-  ${YAVC_PATH}/src/template/juce_plugin_wrapper.cpp
-  ${YAVC_PATH}/src/template/juce_editor_wrapper.cpp
+  ${YAVC_PATH}/src/juce/yavc_juce_plugin.cpp
 )
 target_compile_definitions(${TARGET_NAME}_PLUGIN PUBLIC
   # JUCE_WEB_BROWSER and JUCE_USE_CURL would be on by default, but you might not need them.
