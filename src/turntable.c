@@ -247,10 +247,10 @@ void Turntable_proc(TurntableState* st, float* out[], float* in[], float* tc[])
   vec_muls(in_rec[1], in_adj[1], st->recgain, frame_size);
 
   /* TDVSB */
-  vsb_process(st->tdvsb, out, in_rec, speed, frame_size);
+  vsb_process(st->tdvsb, out, in_rec, speed, NULL, frame_size);
 
   /* FDVSB */
-  FBvsb_process(st->fdvsb, temp, in_rec, speed);
+  FBvsb_process(st->fdvsb, temp, in_rec, speed, NULL);
 
   /* Balance between TD vs FD */
   vec_wadd1(out[0], 1.0f - st->fdbal, st->fdbal, temp[0], frame_size);

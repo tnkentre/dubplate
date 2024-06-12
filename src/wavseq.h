@@ -43,7 +43,7 @@ typedef struct wavseq_state_ wavseq_state;
  * @param frame_size Number of frame size
  * @return Initialized state of the wavseq
  */
-wavseq_state* wavseq_init(const char *name, int fs, int frame_size);
+wavseq_state* wavseq_init(const char *name, int fs, int frame_size, int bar_max);
 
 /** @fn void wavseq_proc(wavseq_state* st, float* out[], float* in[], float* tc[])
  * @brief This function execute wavseq
@@ -52,5 +52,5 @@ wavseq_state* wavseq_init(const char *name, int fs, int frame_size);
  * @param in  Input audio buffer's pointer array
  * @param speed Input speed value pointer array
  */
-void wavseq_proc(wavseq_state* st, float* out[], float* in[], float* speed);
+void wavseq_proc(wavseq_state* st, float* out[], float* in[], float* speed, double* position);
 #endif /* _wavseq_H_ */

@@ -50,15 +50,15 @@ typedef struct FBVSB_State_ FBVSB_State;
  */
 FBVSB_State *FBvsb_init(const char * name, int nch, int fs, int frame_size, float length_sec);
 
-/** @fn void FBvsb_process(FBVSB_State * restrict st, const float * E2, int nband)
- * @brief This function execute FBvsb in frequency domain
+/** @fn void FBvsb_process(FBVSB_State * restrict st, float* dst[], float* src[], float* speed)
+ * @brief This function execute FBvsb with speed array
  * @param st    State of the FBVSB
- * @param speed output speed buffer's pointer array
- * @param tcL   input Lch tc signal buffer's pointer array
- * @param tcR   input Rch tc signal buffer's pointer array
- * @param len   Length of the buffer
+ * @param dst   Output buffer
+ * @param src   Input buffer
+ * @param speed Speed array
+ * @param position Position array, NULL for not using
  */
-void FBvsb_process(FBVSB_State * restrict st, float* dst[], float* src[], float* speed);
+void FBvsb_process(FBVSB_State * restrict st, float* dst[], float* src[], float* speed, double* position);
 
 /** @fn int FBvsb_get_buflen(FBVSB_State * restrict st)
  * @brief This function gets the buffer length

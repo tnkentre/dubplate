@@ -165,7 +165,7 @@ FBVSB_State *FBvsb_init(const char * name, int nch, int fs, int frame_size, floa
   return st;
 }
 
-static void proc_put(FBVSB_State * restrict st, float* src[], float* speed)
+static void proc_put(FBVSB_State * restrict st, float* src[], float* speed, double* position)
 {
   int i,m,ch;
   int frame_size    = st->frame_size;
@@ -187,7 +187,12 @@ static void proc_put(FBVSB_State * restrict st, float* src[], float* speed)
   ALLOC(sctemp, nband+1,       float);
   
   for (i=0; i<frame_size; i++) {
-    st->fpos += speed[i];
+    if (position) {
+      st->fpos = (float)(position[i] * st->nhist * st->frame_size);
+    }
+    else {
+      st->fpos += speed[i];
+    }
     ADJIDX(st->fpos, st->loop_start, st->loop_end, nhist * frame_size);
     putlen++;
     if ((int)(st->fpos / frame_size) != cur) {
@@ -236,7 +241,7 @@ static void proc_put(FBVSB_State * restrict st, float* src[], float* speed)
   RESTORE_STACK;
 }
 
-static void proc_get(FBVSB_State * restrict st, float* dst[], float* speed)
+static void proc_get(FBVSB_State * restrict st, float* dst[], float* speed, double* position)
 {
   int i, ch;
   float pi_2        = 2.f * (float)M_PI;
@@ -258,7 +263,12 @@ static void proc_get(FBVSB_State * restrict st, float* dst[], float* speed)
   ALLOC(ph,  nband,   float);
   ALLOC(X,   nband+1, rv_complex);
   
-  fpos += vec_sum(speed, st->frame_size);
+  if (position) {
+    fpos = (float)(position[st->frame_size-1] * st->nhist * st->frame_size);
+  }
+  else {
+    fpos += vec_sum(speed, st->frame_size);
+  }
   ADJIDX(fpos, st->loop_start, st->loop_end, nhist * frame_size);
   cur = (int)(fpos / frame_size);
   cur1 = cur < nhist-1 ? cur + 1 : 0;
@@ -289,19 +299,18 @@ static void proc_get(FBVSB_State * restrict st, float* dst[], float* speed)
   RESTORE_STACK;
 }
 
-
-void FBvsb_process(FBVSB_State * restrict st, float* dst[], float* src[], float* speed)
+void FBvsb_process(FBVSB_State * restrict st, float* dst[], float* src[], float* speed, double* position)
 {
   int ch;
   int nch        = st->nch;
   int frame_size = st->frame_size;
   
-  proc_get(st, dst, speed);
+  proc_get(st, dst, speed, position);
   for (ch=0; ch<nch; ch++) {
     vec_mul1s(dst[ch], st->loopgain * st->feedbackgain, frame_size);
   }
 
-  proc_put(st, src, speed);
+  proc_put(st, src, speed, position);
 }
 
 int FBvsb_get_buflen(FBVSB_State * restrict st)

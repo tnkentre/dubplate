@@ -49,15 +49,16 @@ typedef struct VSB_State_ VSB_State;
  */
 VSB_State *vsb_init(const char * name, int size);
 
-/** @fn void vsb_process(VSB_State * restrict st, const float * E2, int nband)
- * @brief This function execute vsb in frequency domain
- * @param st    State of the VSB
- * @param speed output speed buffer's pointer array
- * @param tcL   input Lch tc signal buffer's pointer array
- * @param tcR   input Rch tc signal buffer's pointer array
- * @param len   Length of the buffer
+/** @fn void vsb_process(VSB_State * restrict st, float* dst[], float* src[], float* speed, int len)
+ * @brief This function execute vsb with speed
+ * @param st State of the VSB
+ * @param dst Output buffer
+ * @param src Input buffer
+ * @param speed Speed array
+ * @param position Position array, NULL for not using
+ * @param len Length of the buffer
  */
-void vsb_process(VSB_State * restrict st, float* dst[], float* src[], float* speed, int len);
+void vsb_process(VSB_State * restrict st, float* dst[], float* src[], float* speed, double* position, int len);
 
 /** @fn void vsb_set_feedbackgain(VSB_State * restrict st, float feedbackgain)
  * @brief This function sets the feedbackgain
@@ -81,6 +82,13 @@ void vsb_set_loop(VSB_State * restrict st, int loop_start, int loop_len);
  * @param speed_prev New last speed
  */
 void vsb_set_pos(VSB_State * restrict st, float fpos, float fpos_prev, float speed_prev);
+
+/** @fn int vsb_get_buflen(VSB_State * restrict st)
+ * @brief This function gets the buffer length
+ * @param st State of the FBVSB
+ * @return Buffer length in time domain data number
+ */
+int vsb_get_buflen(VSB_State * restrict st);
 
 /** @fn float vsb_get_pos(VSB_State * restrict st)
  * @brief This function return the current buffer index

@@ -33,6 +33,18 @@
 #include "wavseq.h"
 
 #define BANK_NUM (5)
+#define ADJIDX(idx, start, end, size)  do {		\
+    if (start < end) {                                  \
+      while(idx < start) idx += (end-start);            \
+      while(idx >= end)  idx -= (end-start);            \
+    }                                                   \
+    else {                                              \
+      if (idx < (start + end)/2) idx += size;           \
+      while(idx < start)     idx += (size-start+end);	\
+      while(idx >= end+size) idx -= (size-start+end);   \
+      if (idx >= size) idx -= size;                     \
+    }                                                   \
+  } while(0)
 
 /*
  * wavseq functions
@@ -63,14 +75,12 @@ struct wavseq_state_ {
   float beat6;
   float beat7;
   float* envelope;
-  float barpos;
+  float envdcy_min;
   float trackpos;
 
   /* Internal */
   int buflen;
-  float fpos;
-  float fpos_prev;
-  float speed_prev;
+  double lastpos;
   int banksel_;
   float recgain_;
   int   recend;
@@ -85,26 +95,26 @@ struct wavseq_state_ {
 } ;
 
 static const RegDef_t rd[] = {
-  AC_REGDEF(banksel,  CLI_ACIPTM, wavseq_state, "Bank selection"),
-  AC_REGDEF(recgain,  CLI_ACFPTM, wavseq_state, "Recording gain"),
-  AC_REGDEF(recfade,  CLI_ACFPTM, wavseq_state, "Fade out of recording"),
-  AC_REGDEF(outgain,  CLI_ACFPTM, wavseq_state, "Output gain"),
-  AC_REGDEF(beat0,    CLI_ACFPTM, wavseq_state, "beat0"),
-  AC_REGDEF(beat1,    CLI_ACFPTM, wavseq_state, "beat1"),
-  AC_REGDEF(beat2,    CLI_ACFPTM, wavseq_state, "beat2"),
-  AC_REGDEF(beat3,    CLI_ACFPTM, wavseq_state, "beat3"),
-  AC_REGDEF(beat4,    CLI_ACFPTM, wavseq_state, "beat4"),
-  AC_REGDEF(beat5,    CLI_ACFPTM, wavseq_state, "beat5"),
-  AC_REGDEF(beat6,    CLI_ACFPTM, wavseq_state, "beat6"),
-  AC_REGDEF(beat7,    CLI_ACFPTM, wavseq_state, "beat7"),
-  AC_REGDEF(fdbal,    CLI_ACFPTM, wavseq_state, "Balance to FD"),
-  AC_REGDEF(fpos,     CLI_ACFPTM, wavseq_state, "track position"),
-  AC_REGDEF(barpos,   CLI_ACFPTM, wavseq_state, "bar position [range : 0 - 1]"),
-  AC_REGDEF(trackpos, CLI_ACFPTM, wavseq_state, "track position [range : 0 - 1]"),
+  AC_REGDEF(banksel,    CLI_ACIPTM, wavseq_state, "Bank selection"),
+  AC_REGDEF(recgain,    CLI_ACFPTM, wavseq_state, "Recording gain"),
+  AC_REGDEF(recfade,    CLI_ACFPTM, wavseq_state, "Fade out of recording"),
+  AC_REGDEF(outgain,    CLI_ACFPTM, wavseq_state, "Output gain"),
+  AC_REGDEF(beat0,      CLI_ACFPTM, wavseq_state, "beat0"),
+  AC_REGDEF(beat1,      CLI_ACFPTM, wavseq_state, "beat1"),
+  AC_REGDEF(beat2,      CLI_ACFPTM, wavseq_state, "beat2"),
+  AC_REGDEF(beat3,      CLI_ACFPTM, wavseq_state, "beat3"),
+  AC_REGDEF(beat4,      CLI_ACFPTM, wavseq_state, "beat4"),
+  AC_REGDEF(beat5,      CLI_ACFPTM, wavseq_state, "beat5"),
+  AC_REGDEF(beat6,      CLI_ACFPTM, wavseq_state, "beat6"),
+  AC_REGDEF(beat7,      CLI_ACFPTM, wavseq_state, "beat7"),
+  AC_REGDEF(fdbal,      CLI_ACFPTM, wavseq_state, "Balance to FD"),
+  AC_REGDEF(rec_len,    CLI_ACFPTM, wavseq_state, "Recording length"),
+  AC_REGDEF(trackpos,   CLI_ACFPTM, wavseq_state, "track position [range : 0 - 1]"),
+  AC_REGDEF(envdcy_min, CLI_ACFPTM, wavseq_state, "Minimum value of envelope decay [range : 0 - 1]"),
   AC_REGADEF(envelope,  xy_len, CLI_ACFPTMA,   wavseq_state, "position"),
 };
 
-wavseq_state* wavseq_init(const char *name, int fs, int frame_size)
+wavseq_state* wavseq_init(const char *name, int fs, int frame_size, int bar_max)
 {
   int ch, fr;
   wavseq_state* st;
@@ -116,7 +126,7 @@ wavseq_state* wavseq_init(const char *name, int fs, int frame_size)
 
   st->fs          = fs;
   st->frame_size  = frame_size;
-  st->bar_max     = 2;
+  st->bar_max     = bar_max;
   st->bpm_base    = 120.f;
   st->xy_len      = 2;
 
@@ -124,10 +134,19 @@ wavseq_state* wavseq_init(const char *name, int fs, int frame_size)
   st->recgain     = 0.0f;
   st->recfade     = dBtoM(-6.0 / (0.02f * fs) * frame_size);
   st->outgain     = 1.0;
+  st->beat0       = 1.f;
+  st->beat1       = 1.f;
+  st->beat2       = 1.f;
+  st->beat3       = 1.f;
+  st->beat4       = 1.f;
+  st->beat5       = 1.f;
+  st->beat6       = 1.f;
+  st->beat7       = 1.f;
   st->fdbal       = 0.0f;
   st->envelope    = MEM_ALLOC(MEM_SDRAM, float, st->xy_len, 4);
   st->envelope[0] = 1.f;
   st->envelope[1] = 1.f;
+  st->envdcy_min  = 0.02f;
 
   ch = 0;
   sprintf(subname, "%s_fdvsb%d",name, ch);
@@ -171,8 +190,8 @@ wavseq_state* wavseq_init(const char *name, int fs, int frame_size)
     int nframes = FBvsb_get_buflen(st->fdvsb[ch]) / st->frame_size;
     for (fr=0; fr<nframes; fr++) {
       wav_read(st->wav, input, st->frame_size);
-      FBvsb_process(st->fdvsb[ch], output, input, speed);
-      vsb_process(st->tdvsb[ch], output, input, speed, st->frame_size);
+      FBvsb_process(st->fdvsb[ch], output, input, speed, NULL);
+      vsb_process(st->tdvsb[ch], output, input, speed, NULL, st->frame_size);
     }
     FBvsb_set_pos(st->fdvsb[ch], 0.f, 0.f, 0.f);
     vsb_set_pos(st->tdvsb[ch], 0.f, 0.f, 0.f);
@@ -184,7 +203,6 @@ wavseq_state* wavseq_init(const char *name, int fs, int frame_size)
   yavc_osc_add_acreg((char*)name, "banksel");
   yavc_osc_add_acreg((char*)name, "recgain");
   yavc_osc_add_acreg((char*)name, "outgain");
-  yavc_osc_add_acreg((char*)name, "barpos");
   yavc_osc_add_acreg((char*)name, "trackpos");
   yavc_osc_add_acreg((char*)name, "beat0");
   yavc_osc_add_acreg((char*)name, "beat1");
@@ -194,21 +212,20 @@ wavseq_state* wavseq_init(const char *name, int fs, int frame_size)
   yavc_osc_add_acreg((char*)name, "beat5");
   yavc_osc_add_acreg((char*)name, "beat6");
   yavc_osc_add_acreg((char*)name, "beat7");
+  yavc_osc_add_acreg((char*)name, "envelope");
 
   return st;
 }
 
-static void compute_envelope(wavseq_state* st, float* envelope, const float* speed)
+static void compute_envelope(wavseq_state* st, float* envelope, const double* position)
 {
   int i;
   int frame_size = st->frame_size;
-  int beatlen = st->buflen / st->bar_max / 8; // 8beat;
-  float fpos = st->fpos;
 
   for (i=0; i<frame_size; i++) {
-    int beatidx = (int)(fpos / beatlen);
-    float beatoffset = fpos / beatlen - beatidx;
-    beatidx = beatidx % 8;
+    float fbeat = (float)(position[i] - (int)position[i]) * 8;;
+    int beatidx = (int)(fbeat);
+    float beatoffset = fbeat - beatidx;
     if     (beatidx == 0) envelope[i] = st->beat0;
     else if(beatidx == 1) envelope[i] = st->beat1;
     else if(beatidx == 2) envelope[i] = st->beat2;
@@ -217,18 +234,22 @@ static void compute_envelope(wavseq_state* st, float* envelope, const float* spe
     else if(beatidx == 5) envelope[i] = st->beat5;
     else if(beatidx == 6) envelope[i] = st->beat6;
     else if(beatidx == 7) envelope[i] = st->beat7;
-    fpos += speed[i];
+    if (beatoffset > st->envelope[0]) {
+      envelope[i] *= POW(MAX(st->envdcy_min, st->envelope[1]), (beatoffset - st->envelope[0]));
+    }
   }
 }
 
-void wavseq_proc(wavseq_state* st, float* out[], float* in[], float* speed)
+void wavseq_proc(wavseq_state* st, float* out[], float* in[], float* speed, double* position)
 {
+  int i;
   int frame_size = st->frame_size;
   int beatlen = st->buflen / st->bar_max / 8; // 8beat;
+  int banksel = st->banksel;
 
   VARDECLR(float*, in_rec);
   VARDECLR(float*, temp);
-  VARDECLR(float, speed_adj);
+  VARDECLR(double, position_adj);
   VARDECLR(float, envelope);
   SAVE_STACK;
   ALLOC(temp,      2, float*);
@@ -237,34 +258,26 @@ void wavseq_proc(wavseq_state* st, float* out[], float* in[], float* speed)
   ALLOC(in_rec[1], frame_size, float);
   ALLOC(temp[0],   frame_size, float);
   ALLOC(temp[1],   frame_size, float);
-  ALLOC(speed_adj, frame_size, float);
+  ALLOC(position_adj, frame_size, double);
   ALLOC(envelope,  frame_size, float);
 
   /* Change bank if available */
-  if (st->banksel != st->banksel_) {
-    if (!st->tdvsb[st->banksel]) {
-      st->banksel = st->banksel_;
+  if (banksel != st->banksel_) {
+    if (!st->tdvsb[banksel]) {
+      banksel = st->banksel_;
+    }
+    else {
+      st->banksel_ = banksel;
     }
   }
 
   /* Compute buffer length in number of 8beat */
-  int buflen = FBvsb_get_buflen(st->fdvsb[st->banksel]);
+  int buflen = FBvsb_get_buflen(st->fdvsb[banksel]);
   int beatnum = (int)(EXP2(((int)(LOG2((float)buflen / (float)beatlen) + 0.5f))));
   
-  /* Compute BPM */
-  float bpm = 60.f * st->fs / ((float)buflen / beatnum * 2.f);
+  /* Compute bar length */
+  float barlen = beatnum / 8.f;
 
-  /* Set buffer pointer to VSB */
-  if (st->banksel != st->banksel_) {
-    float fpos      = st->fpos * st->bpm_base / bpm;
-    float fpos_prev = st->fpos_prev * st->bpm_base / bpm;
-    float speed_prev = st->speed_prev * st->bpm_base / bpm;
-    vsb_set_pos(st->tdvsb[st->banksel], fpos, fpos_prev, speed_prev);
-    FBvsb_set_pos(st->fdvsb[st->banksel], fpos, fpos_prev, speed_prev);
-    TRACE(LEVEL_INFO, "BPM:%f / Beat num:%d", bpm, beatnum);
-    st->banksel_ = st->banksel;
-  }
-  
   /* Adjust recording gain */
   if (st->recgain > st->recgain_) {
     st->rec_startspeed = speed[0];
@@ -277,7 +290,7 @@ void wavseq_proc(wavseq_state* st, float* out[], float* in[], float* speed)
   if (st->rec_startspeed * speed[0] < 0.f) {
     st->recend = 1;
   }
-  if (FABS(st->rec_len) >= buflen) {
+  if (FABS(st->rec_len) >= barlen) {
     st->recend = 1;
   }
   if (st->recend) {
@@ -291,51 +304,41 @@ void wavseq_proc(wavseq_state* st, float* out[], float* in[], float* speed)
 
   /* overdub setting */
   if (st->recgain == 1.f) {
-    vsb_set_feedbackgain(st->tdvsb[st->banksel], 0.f);
-    FBvsb_set_feedbackgain(st->fdvsb[st->banksel], 0.f);
+    vsb_set_feedbackgain(st->tdvsb[banksel], 0.f);
+    FBvsb_set_feedbackgain(st->fdvsb[banksel], 0.f);
   }
   else {
-    vsb_set_feedbackgain(st->tdvsb[st->banksel], 1.f);
-    FBvsb_set_feedbackgain(st->fdvsb[st->banksel], 1.f);
+    vsb_set_feedbackgain(st->tdvsb[banksel], 1.f);
+    FBvsb_set_feedbackgain(st->fdvsb[banksel], 1.f);
   }
 
-  /* Adjust speed for selected bank */
-  vec_muls(speed_adj, speed, st->bpm_base / bpm, frame_size);
+  /* Adjust position for selected bank */
+  COPY(position_adj, position, frame_size);
+  for (i=0; i<frame_size; i++) {
+    ADJIDX(position_adj[i], 0, (double)beatnum/8.0, (double)beatnum/8.0);
+    position_adj[i] = position_adj[i] / ((double)beatnum/8.0);
+  }
+  st->trackpos = position_adj[frame_size-1];
 
   /* TDVSB */
-  vsb_process(st->tdvsb[st->banksel], out, in_rec, speed_adj, frame_size);
+  vsb_process(st->tdvsb[banksel], out, in_rec, speed, position_adj, frame_size);
 
   /* FDVSB */
-  FBvsb_process(st->fdvsb[st->banksel], temp, in_rec, speed_adj);
+  FBvsb_process(st->fdvsb[banksel], temp, in_rec, speed, position_adj);
 
   /* envelope */
-  compute_envelope(st, envelope, speed);
+  compute_envelope(st, envelope, position);
 
   /* Update position */
-  float progress = vec_sum(speed, frame_size);
-  st->fpos += progress;
-  st->fpos_prev -= speed[frame_size-1];
-  st->speed_prev = speed[frame_size-1];
-  if (!st->recend) {
-    st->rec_len += progress;
+  double progress = position[frame_size-1] - st->lastpos;
+  if (FABS(progress) > st->bar_max/2) {
+    if (progress < 0.f) progress += st->bar_max;
+    else progress -= st->bar_max;
   }
-
-  while (st->fpos < 0) st->fpos += st->buflen;
-  while (st->fpos >= st->buflen) st->fpos -= st->buflen;
-  while (st->fpos_prev < 0) st->fpos_prev += st->buflen;
-  while (st->fpos_prev >= st->buflen) st->fpos_prev -= st->buflen;
-
-  float barlen = st->buflen / st->bar_max;
-  float barpos = st->fpos / barlen;
-  while (barpos < 0) barpos += 1.f;
-  while (barpos >= 1.f) barpos -= 1.f;
-  st->barpos = barpos;
-
-  float tracklen = FBvsb_get_buflen(st->fdvsb[st->banksel]);
-  float trackpos = vsb_get_pos(st->tdvsb[st->banksel]) / tracklen;
-  while (trackpos < 0) trackpos += 1.f;
-  while (trackpos >= 1.f) trackpos -= 1.f;
-  st->trackpos = trackpos;
+  if (!st->recend) {
+    st->rec_len += (float)progress;
+  }
+  st->lastpos = position[frame_size-1];
 
   /* Balance between TD vs FD */
   vec_wadd1(out[0], 1.0f - st->fdbal, st->fdbal, temp[0], frame_size);

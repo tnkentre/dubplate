@@ -136,25 +136,6 @@ dsptop_state* dsptop_init(int fs, int frame_size)
     st->mtseq[i] = mtseq_init(name, st->fs, st->frame_size);
   }
 
-  for (i=0; i<NTURNTABLE; i++) {
-#if 0
-    char str[32];
-    sprintf(str, "mt%d_seq0",i);   yavc_osc_add_acreg(str, "barpos");
-    sprintf(str, "sync%d",i);   yavc_osc_add_acreg("top", str);
-    sprintf(str, "source%d",i); yavc_osc_add_acreg("top", str);
-    sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "igain");
-    sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "recgain");
-    sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "overdub");
-    sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "fdbal");
-    sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "monitor");
-    sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "looplen");
-    sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "looppos");
-    sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "vinyl");
-    sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "loopstart");
-    sprintf(str, "tt%d", i);    yavc_osc_add_acreg(str, "loopend");
-#endif
-  }
-
   yavc_osc_set_moninterval(20);
 
   /* Associate this initialized top */
@@ -174,12 +155,15 @@ void dsptop_proc(dsptop_state* st, float* out[], float* in[])
   float ** src;
 
   if (st->source) src = &in[CH_IN_EFXL];
-  else             src = &in[CH_IN_AUDL];
+  else            src = &in[CH_IN_AUDL];
   mtseq_proc(st->mtseq[0], &out[CH_OUT_AUD0L], src, &in[CH_IN_TC0L]);
   mtseq_proc(st->mtseq[1], &out[CH_OUT_AUD1L], src, &in[CH_IN_TC1L]);
 
   vec_add(out[CH_OUT_MIXL], out[CH_OUT_AUD0L], out[CH_OUT_AUD1L], st->frame_size);
   vec_add(out[CH_OUT_MIXR], out[CH_OUT_AUD0R], out[CH_OUT_AUD1R], st->frame_size);
+
+  mtseq_delay(st->mtseq[0], &out[CH_OUT_EFXL], &in[CH_IN_EFXL]);
+
 }
 
 //----------------------------------------------------------

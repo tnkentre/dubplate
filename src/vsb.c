@@ -71,6 +71,8 @@ static const RegDef_t rd[] = {
   AC_REGDEF(loop_len,     CLI_ACIPTM,   VSB_State, "lentgh of loop"),
   AC_REGDEF(fpos,         CLI_ACFPTM,   VSB_State, "buffer index"),
   AC_REGDEF(size,         CLI_ACIPTM,   VSB_State, "buffer size"),
+  AC_REGADEF(buf[0],  size, CLI_ACFPTMA, VSB_State, "Buffer Lch"),
+  AC_REGADEF(buf[1],  size, CLI_ACFPTMA, VSB_State, "Buffer Rch")
 };
 
 VSB_State *vsb_init(const char * name, int size)
@@ -96,7 +98,7 @@ VSB_State *vsb_init(const char * name, int size)
   return st;
 }
 
-void vsb_process(VSB_State * restrict st, float* dst[], float* src[], float* speed, int len)
+void vsb_process(VSB_State * restrict st, float* dst[], float* src[], float* speed, double* position, int len)
 {
   int   i, j;
   int   ipos;
@@ -113,7 +115,13 @@ void vsb_process(VSB_State * restrict st, float* dst[], float* src[], float* spe
 
     // Get history
     fpos_prev   = st->fpos_prev;
-    fpos        = st->fpos;
+    if (position) {
+      fpos = (float)(position[i] * st->size);
+      ADJIDX(fpos, st->loop_start, st->loop_end, st->size);
+    }
+    else {
+      fpos        = st->fpos;
+    }
     src_prev[0] = st->src_prev[0];
     src_prev[1] = st->src_prev[1];
     speed_prev  = st->speed_prev;
@@ -193,8 +201,10 @@ void vsb_process(VSB_State * restrict st, float* dst[], float* src[], float* spe
     }
 
     // update history
-    fpos += speed[i];
-    ADJIDX(fpos, st->loop_start, st->loop_end, st->size);
+    if (!position) {
+      fpos += speed[i];
+      ADJIDX(fpos, st->loop_start, st->loop_end, st->size);
+    }
     st->fpos_prev   = st->fpos;
     st->fpos        = fpos;
     st->src_prev[0] = src[0][i];
@@ -239,6 +249,11 @@ void vsb_set_pos(VSB_State * restrict st, float fpos, float fpos_prev, float spe
   st->src_prev[0] = 0.f;
   st->src_prev[1] = 0.f;
   st->speed_prev  = speed_prev;
+}
+
+int vsb_get_buflen(VSB_State * restrict st)
+{
+  return st->size;
 }
 
 float vsb_get_pos(VSB_State * restrict st)

@@ -53,4 +53,7 @@ mtseq_state* mtseq_init(const char *name, int fs, int frame_size);
  * @param tc  Input time code buffer's pointer array
  */
 void mtseq_proc(mtseq_state* st, float* out[], float* in[], float* tc[]);
+
+void mtseq_delay(mtseq_state* st, float* out[], float* in[]);
+
 #endif /* _mtseq_H_ */
