@@ -43,7 +43,7 @@ typedef struct mtseq_state_ mtseq_state;
  * @param frame_size Number of frame size
  * @return Initialized state of the mtseq
  */
-mtseq_state* mtseq_init(const char *name, int fs, int frame_size);
+mtseq_state* mtseq_init(const char *name, int fs, int frame_size, MIDI_State* midi);
 
 /** @fn void mtseq_proc(mtseq_state* st, float* out[], float* in[], float* tc[])
  * @brief This function execute mtseq

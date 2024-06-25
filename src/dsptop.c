@@ -26,6 +26,7 @@
  */
 
 #include "yavc.h"
+#include "midi.h"
 #include "vectors.h"
 #include "vectors_cplx.h"
 #include "FB.h"
@@ -64,7 +65,7 @@ typedef enum {
   CH_OUT_NUM
 } CH_OUT;
 
-#define NTURNTABLE   (2)
+#define NTURNTABLE   (1)
 //----------------------------------------------------------
 // DSPTOP configuration (Needed for DspCoreAC class)
 //----------------------------------------------------------
@@ -91,6 +92,8 @@ struct dsptop_state_{
   /* Co-components */
   mtseq_state* mtseq[NTURNTABLE];
 
+  /* MIDI support */
+  MIDI_State*     midi;
 } ;
 
 //----------------------------------------------------------
@@ -130,10 +133,13 @@ dsptop_state* dsptop_init(int fs, int frame_size)
 
   st->bpm = 130;
 
+  /* Create MIDI state */
+  st->midi        = midi_init("midi", st->frame_size);
+
   /* Initialize Co-components */
   for (i=0; i<NTURNTABLE; i++) {
     sprintf(name, "mt%d",i);
-    st->mtseq[i] = mtseq_init(name, st->fs, st->frame_size);
+    st->mtseq[i] = mtseq_init(name, st->fs, st->frame_size, st->midi);
   }
 
   yavc_osc_set_moninterval(20);
@@ -157,13 +163,26 @@ void dsptop_proc(dsptop_state* st, float* out[], float* in[])
   if (st->source) src = &in[CH_IN_EFXL];
   else            src = &in[CH_IN_AUDL];
   mtseq_proc(st->mtseq[0], &out[CH_OUT_AUD0L], src, &in[CH_IN_TC0L]);
-  mtseq_proc(st->mtseq[1], &out[CH_OUT_AUD1L], src, &in[CH_IN_TC1L]);
+//  mtseq_proc(st->mtseq[1], &out[CH_OUT_AUD1L], src, &in[CH_IN_TC1L]);
 
   vec_add(out[CH_OUT_MIXL], out[CH_OUT_AUD0L], out[CH_OUT_AUD1L], st->frame_size);
   vec_add(out[CH_OUT_MIXR], out[CH_OUT_AUD0R], out[CH_OUT_AUD1R], st->frame_size);
 
   mtseq_delay(st->mtseq[0], &out[CH_OUT_EFXL], &in[CH_IN_EFXL]);
 
+}
+void dsptop_proc_with_midi(dsptop_state* st, float* out[], float* in[],
+  MIDI_MSG* midirecv_msg, size_t midirecv_len,
+  const MIDI_MSG** midisend_msg, size_t* midisend_len)
+{
+  /* Receive MIDI data */
+  midi_start_frame(st->midi, (MIDI_MSG*)midirecv_msg, midirecv_len);
+
+  dsptop_proc(st, out, in);
+
+  /* send MIDI data to host */
+  *midisend_msg = midi_send_buffer(st->midi);
+  *midisend_len = midi_send_num(st->midi);
 }
 
 //----------------------------------------------------------

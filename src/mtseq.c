@@ -25,6 +25,7 @@
  * @author Ryo Tanaka
  */
 #include "yavc.h"
+#include "midi.h"
 #include "vectors.h"
 #include "tcanalysis.h"
 #include "vsb.h"
@@ -33,8 +34,9 @@
 #include "wavseq.h"
 #include "mtseq.h"
 
-#define TRACK_NUM (4)
-#define BAR_MAX   (2)
+#define TRACK_NUM         (4)
+#define BAR_MAX           (4)
+#define MIDICLOCK_AVGNUM  (96)
 
 /* modify buffer index to be within the range */
 #define ADJIDX(idx, start, end, size)  do {		\
@@ -66,21 +68,28 @@ struct mtseq_state_ {
   float barpos;
   int delaylen;
   int delaysel;
+  int delayadj;
+  uint64_t midiclock_lastcnt;
+  uint64_t midiclock_cnt;
+  int midiclock_duration[MIDICLOCK_AVGNUM];
+  int midiclock_idx;
 
   /* Audio Components */
   TCANALYSIS_State * tcana;
   wavseq_state * wavseq[TRACK_NUM];
   SimpleCBState * delay[2];
+  MIDI_State* midi;
 } ;
 
 static const RegDef_t rd[] = {
-  AC_REGDEF(bpm,      CLI_ACFPTM, mtseq_state, "BPM"),
-  AC_REGDEF(fpos,     CLI_ACFPTM, mtseq_state, "fpos"),
-  AC_REGDEF(barpos,   CLI_ACFPTM, mtseq_state, "barpos"),
+  AC_REGDEF(bpm,       CLI_ACFPTM, mtseq_state, "BPM"),
+  AC_REGDEF(fpos,      CLI_ACFPTM, mtseq_state, "fpos"),
+  AC_REGDEF(barpos,    CLI_ACFPTM, mtseq_state, "barpos"),
   AC_REGDEF(delaysel,  CLI_ACIPTM, mtseq_state, "delay selection"),
+  AC_REGDEF(delayadj,  CLI_ACIPTM, mtseq_state, "delay adjustment [range: 0 - 512]"),
 };
 
-mtseq_state* mtseq_init(const char *name, int fs, int frame_size)
+mtseq_state* mtseq_init(const char *name, int fs, int frame_size, MIDI_State* midi)
 {
   int i;
   mtseq_state* st;
@@ -92,9 +101,11 @@ mtseq_state* mtseq_init(const char *name, int fs, int frame_size)
 
   st->fs         = fs;
   st->frame_size = frame_size;
+  st->midi       = midi;
 
   st->bpm        = 120;
   st->delaylen   = st->fs * 10;
+  st->delayadj   = 270;
 
   sprintf(subname, "%s_tcana",name);
   st->tcana = tcanalysis_init(subname, st->fs, 1000.f);
@@ -117,7 +128,7 @@ mtseq_state* mtseq_init(const char *name, int fs, int frame_size)
 
 void mtseq_proc(mtseq_state* st, float* out[], float* in[], float* tc[])
 {
-  int i;
+  int i,j;
   int frame_size = st->frame_size;
 
   VARDECLR(float*, out_track);
@@ -129,6 +140,24 @@ void mtseq_proc(mtseq_state* st, float* out[], float* in[], float* tc[])
   ALLOC(out_track[1], frame_size, float);
   ALLOC(speed,        frame_size, float);
   ALLOC(position,     frame_size, double);
+
+  /* Receive MIDI */
+  int msg_num = midi_recv_num(st->midi);
+  const MIDI_MSG* msg = midi_recv_buffer(st->midi);
+  for (i=0; i<msg_num; i++) {
+    //TRACE(LEVEL_INFO, "MIDI:%02X %02X %02X", msg[i].data[0], msg[i].data[1], msg[i].data[2]);
+    if (msg[i].data[0] == 0xF8) {
+      st->midiclock_duration[st->midiclock_idx] = (int)(st->midiclock_cnt + msg[i].sample_offset - st->midiclock_lastcnt);
+      st->midiclock_idx = (st->midiclock_idx + 1) % MIDICLOCK_AVGNUM;
+      st->midiclock_lastcnt = st->midiclock_cnt + msg[i].sample_offset;
+      int sum = 0.f;
+      for (j=0; j<MIDICLOCK_AVGNUM; j++) {
+        sum += st->midiclock_duration[j];
+      }
+      st->bpm = (int)(60.f * st->fs * MIDICLOCK_AVGNUM / 24 / (float)sum + 0.5f);
+    }
+  }
+  st->midiclock_cnt += frame_size;
 
   /* Compute speed from TC sound */
   tcanalysis_process(st->tcana, speed, tc[0], tc[1], frame_size);
@@ -179,7 +208,7 @@ void mtseq_delay(mtseq_state* st, float* out[], float* in[])
   else if (st->delaysel == 7) delaytime_bar = 1.f;
   float delaytap = 60.f / st->bpm * 4 * delaytime_bar * st->fs;
   while(delaytap > st->delaylen) delaytap /= 2.f;
-  delaytap -= 2 * st->frame_size;
+  delaytap -= 2 * st->frame_size + st->delayadj;
 
   for (i=0; i<2; i++) {
     simplecb_read(st->delay[i], out[i], st->frame_size, delaytap);

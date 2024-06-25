@@ -90,7 +90,7 @@ juce_add_plugin(${TARGET_NAME}_PLUGIN
 
 juce_generate_juce_header (${TARGET_NAME}_PLUGIN)
 target_sources            (${TARGET_NAME}_PLUGIN PRIVATE
-  ${YAVC_PATH}/src/juce/yavc_juce_plugin.cpp
+  ${YAVC_PATH}/build.${PLATFORM}/include/yavc/juce/yavc_juce_plugin_with_midi.cpp
 )
 target_compile_definitions(${TARGET_NAME}_PLUGIN PUBLIC
   # JUCE_WEB_BROWSER and JUCE_USE_CURL would be on by default, but you might not need them.

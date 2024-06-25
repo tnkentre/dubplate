@@ -115,11 +115,12 @@ FBVSB_State *FBvsb_init(const char * name, int nch, int fs, int frame_size, floa
   FBVSB_State* st;
   const FB_filters_info * fbinfo;
 
-  int fft_size      = 2 * frame_size;
+  //int fft_size      = 2 * frame_size;
+  int fft_size      = 4 * frame_size;
   int fbfilter_size = 3 * fft_size;
   int nband         = fft_size / 2;
 
-  fbinfo = FB_filters_getinfo(frame_size, fft_size, fbfilter_size);
+  fbinfo = FB_filters_getinfo(fft_size/2, fft_size, fbfilter_size);
   
   st = MEM_ALLOC(MEM_SDRAM, FBVSB_State, 1, 8);
 
@@ -141,18 +142,24 @@ FBVSB_State *FBvsb_init(const char * name, int nch, int fs, int frame_size, floa
   COPY(st->ha, fbinfo->filter_h, fbfilter_size);
 
   st->ch = MEM_ALLOC(MEM_SDRAM, CH, nch, 4);
+  int histsize  = sizeof(rv_complex) * (nband+1)
+                + sizeof(rv_complex) * (nband+1)
+                + sizeof(float) * nband
+                + sizeof(float) * nband;
   for (ch = 0; ch < nch; ch++) {
     st->ch[ch].hist = MEM_ALLOC(MEM_SDRAM, HISTORY, st->nhist, 8);
+    char* buf = MEM_ALLOC(MEM_SDRAM, char, histsize * st->nhist, 8);
     for (i = 0; i < st->nhist; i++) {
-      st->ch[ch].hist[i].X   = MEM_ALLOC(MEM_SDRAM, rv_complex, nband+1, 8);
-      st->ch[ch].hist[i].X1  = MEM_ALLOC(MEM_SDRAM, rv_complex, nband+1, 8);
-      st->ch[ch].hist[i].lev = MEM_ALLOC(MEM_SDRAM, float,      nband,   8);
-      st->ch[ch].hist[i].ph  = MEM_ALLOC(MEM_SDRAM, float,      nband,   8);
+      st->ch[ch].hist[i].X   = (rv_complex*)buf; buf += sizeof(rv_complex) * (nband+1);
+      st->ch[ch].hist[i].X1  = (rv_complex*)buf; buf += sizeof(rv_complex) * (nband+1);
+      st->ch[ch].hist[i].lev = (float*)buf; buf += sizeof(float) * nband;
+      st->ch[ch].hist[i].ph  = (float*)buf; buf += sizeof(float) * nband;
     }
     st->ch[ch].tdbuf = simplecb_init(fbfilter_size + frame_size);
     st->ch[ch].levn  = MEM_ALLOC(MEM_SDRAM, float, nband,   8);
     st->ch[ch].phn   = MEM_ALLOC(MEM_SDRAM, float, nband,   8);
-    st->ch[ch].syn   = FBsynthesis_init(fbinfo->fftsize, fbinfo->decimation, fbinfo->lg, fbinfo->filter_g, 1);
+    //st->ch[ch].syn   = FBsynthesis_init(fbinfo->fftsize, fbinfo->decimation, fbinfo->lg, fbinfo->filter_g, 1);
+    st->ch[ch].syn   = FBsynthesis_init(fbinfo->fftsize, frame_size, fbinfo->lg, fbinfo->filter_g, 1);
   }
 
   st->fft           = yavc_fft_r2c_init(fft_size);
@@ -263,11 +270,12 @@ static void proc_get(FBVSB_State * restrict st, float* dst[], float* speed, doub
   ALLOC(ph,  nband,   float);
   ALLOC(X,   nband+1, rv_complex);
   
+  float progress = vec_sum(speed, st->frame_size);
   if (position) {
     fpos = (float)(position[st->frame_size-1] * st->nhist * st->frame_size);
   }
   else {
-    fpos += vec_sum(speed, st->frame_size);
+    fpos += progress;
   }
   ADJIDX(fpos, st->loop_start, st->loop_end, nhist * frame_size);
   cur = (int)(fpos / frame_size);
@@ -294,6 +302,7 @@ static void proc_get(FBVSB_State * restrict st, float* dst[], float* speed, doub
     }
     CPX_ZERO(X[nband]);
     FBsynthesis_process(chst->syn, dst[ch], X);
+    vec_mul1s(dst[ch], 2.f * frame_size / st->fft_size, frame_size);
   }
 
   RESTORE_STACK;

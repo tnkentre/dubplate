@@ -55,6 +55,7 @@ struct VSB_State_ {
   int    loop_len;
   int    loop_start;
   int    loop_end;
+  float  bal[2];
 
   /* parameters */
   float loopgain;
@@ -71,6 +72,7 @@ static const RegDef_t rd[] = {
   AC_REGDEF(loop_len,     CLI_ACIPTM,   VSB_State, "lentgh of loop"),
   AC_REGDEF(fpos,         CLI_ACFPTM,   VSB_State, "buffer index"),
   AC_REGDEF(size,         CLI_ACIPTM,   VSB_State, "buffer size"),
+  AC_REGDEF(bal[0],       CLI_ACFPTM,   VSB_State, "buffer index"),
   AC_REGADEF(buf[0],  size, CLI_ACFPTMA, VSB_State, "Buffer Lch"),
   AC_REGADEF(buf[1],  size, CLI_ACFPTMA, VSB_State, "Buffer Rch")
 };
@@ -163,6 +165,7 @@ void vsb_process(VSB_State * restrict st, float* dst[], float* src[], float* spe
         }
         for (j=ipos_prev+1; j<=ipos_temp; j++) {
           bal1 = ((float)j - fpos_prev) / (fpos - fpos_prev);
+          //if (fpos < fpos_prev) TRACE(LEVEL_INFO, "illegal pos : %f / %f", fpos, fpos_prev);
           bal0 = 1.f - bal1;
           bufidx = j;
           ADJIDX(bufidx, st->loop_start, st->loop_end, st->size);
@@ -171,6 +174,8 @@ void vsb_process(VSB_State * restrict st, float* dst[], float* src[], float* spe
           st->buf[0][bufidx] += st->recgain * (bal0 * src_prev[0] + bal1 * src[0][i]);
           st->buf[1][bufidx] += st->recgain * (bal0 * src_prev[1] + bal1 * src[1][i]);
         }
+        st->bal[0] = bal0;
+        st->bal[1] = bal1;
       }
       else if (speed_prev < 0.f) {
         // writing during ipos_prev --> ipos        

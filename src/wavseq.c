@@ -119,6 +119,7 @@ wavseq_state* wavseq_init(const char *name, int fs, int frame_size, int bar_max)
   int ch, fr;
   wavseq_state* st;
   char subname[32];
+  float sec;
   
   st = MEM_ALLOC(MEM_SDRAM, wavseq_state, 1, 4);
   AC4_ADD(name, st, "wavseq");
@@ -148,15 +149,20 @@ wavseq_state* wavseq_init(const char *name, int fs, int frame_size, int bar_max)
   st->envelope[1] = 1.f;
   st->envdcy_min  = 0.02f;
 
+#if 0
   ch = 0;
   sprintf(subname, "%s_fdvsb%d",name, ch);
-  float sec = 60.f / st->bpm_base * 4 * st->bar_max;
+  sec = 60.f / st->bpm_base * 4 * st->bar_max;
   st->fdvsb[ch] = FBvsb_init(subname, 2, st->fs, st->frame_size, sec);
 
   st->buflen = FBvsb_get_buflen(st->fdvsb[ch]);
 
   sprintf(subname, "%s_tdvsb%d",name, ch);
   st->tdvsb[ch] = vsb_init(subname, st->buflen);
+#else
+  sec = 60.f / st->bpm_base * 4 * st->bar_max;
+  st->buflen = sec * st->fs;
+#endif
 
   /* TODO VSB for wav files */
   sprintf(subname, "%s_wav",name);
@@ -174,10 +180,13 @@ wavseq_state* wavseq_init(const char *name, int fs, int frame_size, int bar_max)
   ALLOC(output[1], st->frame_size, float);
   ALLOC(speed, st->frame_size, float);
 
-  for (ch=1; ch<BANK_NUM; ch++) {
+  for (ch=0; ch<BANK_NUM; ch++) {
     char filename[256];
-    sprintf(filename, "/Users/ryo.tanaka/Music/dubplate_samples/%s/s%d.wav", name, ch-1);
-    if(wav_open_FileRead(st->wav, filename) < 0) continue;
+    sprintf(filename, "/Users/ryo.tanaka/Music/dubplate_samples/%s/s%d.wav", name, ch);
+    if(wav_open_FileRead(st->wav, filename) < 0) {
+      TRACE(LEVEL_INFO, "Audio file is not found : %s", filename);
+      continue;
+    }
 
     TRACE(LEVEL_INFO, "Audio file loaded : %s", filename);
     sec = wav_get_length_sec(st->wav);
@@ -261,10 +270,12 @@ void wavseq_proc(wavseq_state* st, float* out[], float* in[], float* speed, doub
   ALLOC(position_adj, frame_size, double);
   ALLOC(envelope,  frame_size, float);
 
+
   /* Change bank if available */
   if (banksel != st->banksel_) {
     if (!st->tdvsb[banksel]) {
       banksel = st->banksel_;
+      st->banksel = st->banksel_;
     }
     else {
       st->banksel_ = banksel;
